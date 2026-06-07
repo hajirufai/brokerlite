@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BrokerLite — In-Memory Message Broker from Scratch</title>
+<meta name="description" content="A full message broker built from scratch in Python. Zero dependencies. Partitioned topics, consumer groups, queues, WAL, retries, dead letters, TCP protocol.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Geist:wght@400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0f14;--surface:#151921;--surface2:#1c2230;--border:#252d3d;
+  --text:#c8cdd8;--text-dim:#6b7490;--accent:#47b5a0;--accent2:#3d9fe0;
+  --font-display:'Bricolage Grotesque',system-ui,sans-serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'Geist Mono',monospace;
+}
+html{font-size:16px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.6}
+
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+/* Header */
+header{padding:48px 0 0}
+header h1{font-family:var(--font-display);font-size:clamp(2.4rem,5vw,3.6rem);font-weight:700;color:#fff;letter-spacing:-0.03em;line-height:1.1}
+header h1 span{color:var(--accent)}
+header p.sub{font-size:1.1rem;color:var(--text-dim);margin:16px 0 0;max-width:600px}
+
+/* Stat bar */
+.stats{display:flex;gap:32px;margin:36px 0 0;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column}
+.stat strong{font-family:var(--font-display);font-size:1.6rem;color:#fff;font-weight:700}
+.stat small{font-size:.78rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+
+/* Bento grid */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:48px 0 64px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 24px;transition:border-color .2s}
+.card:hover{border-color:var(--accent)}
+.card.span2{grid-column:span 2}
+.card.tall{grid-row:span 2;display:flex;flex-direction:column;justify-content:space-between}
+.card h3{font-family:var(--font-display);font-size:1.05rem;color:#fff;font-weight:600;margin:0 0 8px}
+.card p{font-size:.88rem;color:var(--text-dim);line-height:1.55}
+.card .tag{display:inline-block;font-size:.7rem;font-family:var(--font-mono);background:var(--surface2);color:var(--accent);padding:3px 8px;border-radius:4px;margin:12px 4px 0 0}
+
+/* Code card */
+.code-card pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:var(--font-mono);font-size:.78rem;color:var(--text);overflow-x:auto;line-height:1.65;margin-top:12px}
+.code-card pre .kw{color:var(--accent2)}.code-card pre .fn{color:var(--accent)}.code-card pre .str{color:#c9a05c}.code-card pre .cm{color:var(--text-dim)}
+
+/* Arch card */
+.arch{font-family:var(--font-mono);font-size:.72rem;line-height:1.7;color:var(--text-dim);margin-top:12px;white-space:pre}
+.arch b{color:var(--accent);font-weight:400}
+
+/* Feature list */
+.flist{list-style:none;margin-top:12px}
+.flist li{font-size:.84rem;color:var(--text);padding:5px 0;border-bottom:1px solid var(--border)}
+.flist li:last-child{border:none}
+.flist li::before{content:'→ ';color:var(--accent)}
+
+/* CTA */
+.cta-row{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:.88rem;font-weight:500;padding:10px 22px;border-radius:8px;text-decoration:none;transition:opacity .2s}
+.btn-primary{background:var(--accent);color:var(--bg)}.btn-primary:hover{opacity:.85}
+.btn-ghost{border:1px solid var(--border);color:var(--text)}.btn-ghost:hover{border-color:var(--accent)}
+
+/* Footer */
+footer{padding:32px 0;border-top:1px solid var(--border);text-align:center}
+footer p{font-size:.8rem;color:var(--text-dim)}
+footer a{color:var(--accent);text-decoration:none}
+
+@media(max-width:720px){
+  .bento{grid-template-columns:1fr}
+  .card.span2{grid-column:span 1}
+  .stats{gap:20px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Broker<span>Lite</span></h1>
+  <p class="sub">A complete in-memory message broker built from scratch in Python. Zero external dependencies. Pub/sub, queues, consumer groups, WAL, retries, dead letters, TCP protocol — all stdlib.</p>
+  <div class="stats">
+    <div class="stat"><strong>22</strong><small>Core modules</small></div>
+    <div class="stat"><strong>315</strong><small>Tests passing</small></div>
+    <div class="stat"><strong>0</strong><small>Dependencies</small></div>
+    <div class="stat"><strong>~5k</strong><small>Lines of code</small></div>
+  </div>
+</header>
+
+<section class="bento">
+
+  <!-- Row 1 -->
+  <div class="card span2 code-card">
+    <h3>Publish → Consume in 6 lines</h3>
+    <pre><span class="kw">from</span> brokerlite.broker <span class="kw">import</span> Broker
+<span class="kw">from</span> brokerlite.message <span class="kw">import</span> Message
+
+broker = Broker()
+broker.<span class="fn">start</span>()
+broker.<span class="fn">create_topic</span>(<span class="str">"orders"</span>)
+broker.<span class="fn">publish</span>(Message(topic=<span class="str">"orders"</span>, value=<span class="str">b"hello"</span>))</pre>
+  </div>
+
+  <div class="card tall">
+    <div>
+      <h3>Core Primitives</h3>
+      <ul class="flist">
+        <li>Partitioned topics with key routing</li>
+        <li>Consumer groups (range + round-robin)</li>
+        <li>FIFO &amp; priority queues</li>
+        <li>Write-ahead log with segments</li>
+        <li>Ack tracking &amp; dead letter queues</li>
+        <li>Configurable retry policies</li>
+        <li>Token-bucket rate limiting</li>
+        <li>Binary wire protocol</li>
+        <li>TCP server &amp; client</li>
+        <li>Schema registry</li>
+        <li>Middleware pipeline</li>
+        <li>CLI admin tool</li>
+      </ul>
+    </div>
+    <div class="cta-row">
+      <a href="https://github.com/hajirufai/brokerlite" class="btn btn-primary">GitHub →</a>
+    </div>
+  </div>
+
+  <!-- Row 2 -->
+  <div class="card">
+    <h3>Pub/Sub</h3>
+    <p>Topics split into partitions for parallelism. Messages route by key hash. Consumer groups rebalance automatically when members join or leave.</p>
+    <span class="tag">topics</span><span class="tag">partitions</span><span class="tag">consumer-groups</span>
+  </div>
+
+  <div class="card">
+    <h3>Reliability</h3>
+    <p>Every message is tracked. Failed deliveries retry with exponential backoff and jitter. After max attempts, messages land in a dead letter queue for inspection and replay.</p>
+    <span class="tag">ack</span><span class="tag">retry</span><span class="tag">dlq</span>
+  </div>
+
+  <div class="card">
+    <h3>Storage</h3>
+    <p>Append-only write-ahead log with automatic segment rotation. SQLite metadata for committed offsets and topic configs. Key-based compaction and time-based retention.</p>
+    <span class="tag">WAL</span><span class="tag">SQLite</span><span class="tag">compaction</span>
+  </div>
+
+  <!-- Row 3 -->
+  <div class="card">
+    <h3>Architecture</h3>
+    <div class="arch"><b>Producer</b> → Middleware → <b>Topic</b>
+           ├── Partition 0
+           ├── Partition 1
+           └── Partition N
+                  ↓
+         <b>ConsumerGroup</b>
+           ├── Consumer A
+           └── Consumer B
+                  ↓
+         <b>AckManager</b> → Retry → <b>DLQ</b></div>
+  </div>
+
+  <div class="card span2 code-card">
+    <h3>TCP Server & Client</h3>
+    <pre><span class="cm"># Start server</span>
+server = BrokerServer(host=<span class="str">"0.0.0.0"</span>, port=<span class="str">9092</span>)
+server.<span class="fn">start</span>(background=<span class="kw">True</span>)
+
+<span class="cm"># Connect client</span>
+client = BrokerClient(host=<span class="str">"localhost"</span>, port=<span class="str">9092</span>)
+client.<span class="fn">connect</span>()
+client.<span class="fn">produce</span>(<span class="str">"events"</span>, <span class="str">b"click"</span>, key=<span class="str">"user-1"</span>)
+msgs = client.<span class="fn">fetch</span>(<span class="str">"events"</span>, partition=0, offset=0)</pre>
+  </div>
+
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p>Built by <a href="https://github.com/hajirufai">Haji Rufai</a> · Python 3.11+ · MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>
